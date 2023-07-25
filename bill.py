@@ -1,18 +1,19 @@
+import streamlit as st
 import pytesseract
 from PIL import Image
 import re
 
-def extract_text_from_image(image_path):
+def extract_text_from_image(image):
     try:
-        # Load the image using PIL (Python Imaging Library)
-        image = Image.open(image_path)
+        # Convert the image to RGB format
+        image = image.convert("RGB")
 
         # Use pytesseract to extract text from the image
         extracted_text = pytesseract.image_to_string(image)
 
         return extracted_text
     except Exception as e:
-        print(f"Error: {e}")
+        st.error(f"Error: {e}")
         return None
 
 def find_highest_total_value(text):
@@ -49,32 +50,36 @@ def find_highest_total_value(text):
     # If the total value is not found, return None
     return None, None
 
-if __name__ == "__main__":
-    # Replace the list below with the actual paths to your image files
-    image_paths = [
-        "bill1.png",
-        "bill2.png",
-        "bill3.webp",
-        "bill4.webp",
-        # Add more image file paths if needed
-    ]
+def main():
+    st.title("Bill Details and Total Amount")
+
+    uploaded_images = st.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"], accept_multiple_files=True)
 
     total_bills_value = 0
 
-    for image_path in image_paths:
-        # Extract text from the image
-        extracted_text = extract_text_from_image(image_path)
+    if uploaded_images:
+        for image in uploaded_images:
+            st.image(image, caption='Uploaded Image', use_column_width=True)
 
-        if extracted_text:
-            # Find the highest total value and its line number from the extracted text
-            total_value, _ = find_highest_total_value(extracted_text)
+            # Convert the uploaded image to a PIL image object
+            pil_image = Image.open(image)
 
-            if total_value is not None:
-                print(f"Total value of the bill in {image_path}: ${total_value:.2f}")
-                total_bills_value += total_value
+            # Extract text from the image
+            extracted_text = extract_text_from_image(pil_image)
+
+            if extracted_text:
+                # Find the highest total value and its line number from the extracted text
+                total_value, _ = find_highest_total_value(extracted_text)
+
+                if total_value is not None:
+                    st.write(f"Total value of the bill: ${total_value:.2f}")
+                    total_bills_value += total_value
+                else:
+                    st.write("Total value not found in the bill.")
             else:
-                print(f"Total value not found in the bill: {image_path}")
-        else:
-            print(f"Text extraction from the image failed: {image_path}")
+                st.write("Text extraction from the image failed.")
 
-    print(f"\nTotal value of all bills: ${total_bills_value:.2f}")
+    st.write(f"\nTotal value of all bills: ${total_bills_value:.2f}")
+
+if __name__ == "__main__":
+    main()
