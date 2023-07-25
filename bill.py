@@ -2,6 +2,7 @@ import streamlit as st
 import pytesseract
 from PIL import Image
 import re
+import math
 
 def extract_text_from_image(image):
     try:
@@ -53,13 +54,21 @@ def find_highest_total_value(text):
 def main():
     st.title("Bill Details and Total Amount")
 
-    uploaded_images = st.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"], accept_multiple_files=True)
+    # Move the upload button to the sidebar
+    uploaded_images = st.sidebar.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"], accept_multiple_files=True)
 
     total_bills_value = 0
 
     if uploaded_images:
-        for image in uploaded_images:
-            st.image(image, caption='Uploaded Image', use_column_width=True)
+        num_images = len(uploaded_images)
+        num_cols = 3
+        num_rows = int(math.ceil(num_images / num_cols))
+
+        st.write("<div style='display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 20px;'>", unsafe_allow_html=True)
+
+        for i, image in enumerate(uploaded_images):
+            st.write("<div style='text-align: center;'>", unsafe_allow_html=True)
+            st.image(image, caption='Uploaded Image', width=200)
 
             # Convert the uploaded image to a PIL image object
             pil_image = Image.open(image)
@@ -72,14 +81,18 @@ def main():
                 total_value, _ = find_highest_total_value(extracted_text)
 
                 if total_value is not None:
-                    st.write(f"Total value of the bill: ${total_value:.2f}")
+                    st.write(f"<p>Total value of the bill: <strong>${total_value:.2f}</strong></p>", unsafe_allow_html=True)
                     total_bills_value += total_value
                 else:
-                    st.write("Total value not found in the bill.")
+                    st.write("<p>Total value not found in the bill.</p>", unsafe_allow_html=True)
             else:
-                st.write("Text extraction from the image failed.")
+                st.write("<p>Text extraction from the image failed.</p>", unsafe_allow_html=True)
 
-    st.write(f"\nTotal value of all bills: ${total_bills_value:.2f}")
+            st.write("</div>", unsafe_allow_html=True)
+
+        st.write("</div>", unsafe_allow_html=True)
+
+    st.write(f"\nTotal value of all bills: <strong>${total_bills_value:.2f}</strong>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
