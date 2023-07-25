@@ -3,7 +3,9 @@ import pytesseract
 from PIL import Image
 import re
 import math
+import pandas as pd
 
+# Function to extract text from an image using pytesseract
 def extract_text_from_image(image):
     try:
         # Convert the image to RGB format
@@ -17,6 +19,7 @@ def extract_text_from_image(image):
         st.error(f"Error: {e}")
         return None
 
+# Function to find the highest total value from the extracted text
 def find_highest_total_value(text):
     # Define regular expression to match currency values
     num_regex = r"\$?(\d{1,3}(?:,?\d{3})*(?:\.\d{2})?)"
@@ -46,30 +49,30 @@ def find_highest_total_value(text):
     if total_values_dict:
         highest_total_value = max(total_values_dict)
         highest_total_line_num = total_values_dict[highest_total_value]
-        return highest_total_value, highest_total_line_num
+        return highest_total_value
 
     # If the total value is not found, return None
-    return None, None
+    return None
 
+# Function to format currency values as a string
+def format_currency(amount):
+    return "${:,.2f}".format(amount)
+
+# Main function to run the Streamlit app
 def main():
-    st.title("Bill Details and Total Amount")
+    st.title("AI Bill Assistant")
 
     # Move the upload button to the sidebar
     uploaded_images = st.sidebar.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"], accept_multiple_files=True)
 
     total_bills_value = 0
+    bill_details = []
 
     if uploaded_images:
-        num_images = len(uploaded_images)
-        num_cols = 3
-        num_rows = int(math.ceil(num_images / num_cols))
+        # List to store the extracted texts from all images
+        extracted_texts = []
 
-        st.write("<div style='display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 20px;'>", unsafe_allow_html=True)
-
-        for i, image in enumerate(uploaded_images):
-            st.write("<div style='text-align: center;'>", unsafe_allow_html=True)
-            st.image(image, caption='Uploaded Image', width=200)
-
+        for image in uploaded_images:
             # Convert the uploaded image to a PIL image object
             pil_image = Image.open(image)
 
@@ -77,22 +80,33 @@ def main():
             extracted_text = extract_text_from_image(pil_image)
 
             if extracted_text:
-                # Find the highest total value and its line number from the extracted text
-                total_value, _ = find_highest_total_value(extracted_text)
+                extracted_texts.append(extracted_text)
+
+                # Find the highest total value from the current text
+                total_value = find_highest_total_value(extracted_text)
 
                 if total_value is not None:
-                    st.write(f"<p>Total value of the bill: <strong>${total_value:.2f}</strong></p>", unsafe_allow_html=True)
                     total_bills_value += total_value
-                else:
-                    st.write("<p>Total value not found in the bill.</p>", unsafe_allow_html=True)
-            else:
-                st.write("<p>Text extraction from the image failed.</p>", unsafe_allow_html=True)
+                    bill_details.append((f"Bill {len(bill_details)+1}", format_currency(total_value)))
 
-            st.write("</div>", unsafe_allow_html=True)
+        # Display the bill details in a table
+        if bill_details:
+            st.subheader("Bill Details")
+            # Create a DataFrame for bill details
+            bills_df = pd.DataFrame(bill_details, columns=["Bill Title", "Amount"])
 
-        st.write("</div>", unsafe_allow_html=True)
+            # Display the editable table for bill details
+            selected_bill = st.selectbox("Select Bill to Edit", bills_df["Bill Title"])
+            new_title = st.text_input("Edit the Bill Title", selected_bill)
 
-    st.write(f"\nTotal value of all bills: <strong>${total_bills_value:.2f}</strong>", unsafe_allow_html=True)
+            if st.button("Update"):
+                # Update the bill title in the DataFrame
+                bills_df.loc[bills_df["Bill Title"] == selected_bill, "Bill Title"] = new_title
+
+            st.table(bills_df)
+
+        # Display the total value of all bills
+        st.write(f"Total value of all bills: {format_currency(total_bills_value)}")
 
 if __name__ == "__main__":
     main()
