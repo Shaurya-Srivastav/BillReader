@@ -97,7 +97,7 @@ def main():
 
             # Display the editable table for bill details
             selected_bill = st.selectbox("Select Bill to Edit", bills_df["Bill Title"])
-            new_title = st.text_input("Edit the Bill Title", selected_bill)
+            new_title = st.text_input("Edit the Bill Title", selected_bill, key="edit_title")
 
             if st.button("Update"):
                 # Update the bill title in the DataFrame
@@ -105,8 +105,15 @@ def main():
 
             st.table(bills_df)
 
+            # Save the edited bill details back to the session state
+            st.session_state.bill_details = bills_df
+
         # Display the total value of all bills
         st.write(f"Total value of all bills: {format_currency(total_bills_value)}")
+
+    else:
+        # If no images are uploaded, reset the bill details
+        st.session_state.bill_details = pd.DataFrame(columns=["Bill Title", "Amount"])
 
 if __name__ == "__main__":
     main()
