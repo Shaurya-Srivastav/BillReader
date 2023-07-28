@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pytesseract
 from PIL import Image
@@ -6,23 +5,7 @@ import re
 import pandas as pd
 import sqlite3
 import base64
-
-
-# Custom caching mechanism for the extract_text_from_image function
-@st.cache(allow_output_mutation=True)
-def extract_text_from_image(image):
-    try:
-        # Convert the image to RGB format
-        image = image.convert("RGB")
-
-        # Use pytesseract to extract text from the image
-        extracted_text = pytesseract.image_to_string(image)
-
-        return extracted_text
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return None
-
+from io import BytesIO
 
 # Function to find the highest total value from the extracted text
 def find_highest_total_value(text):
@@ -59,10 +42,6 @@ def find_highest_total_value(text):
     # If the total value is not found, return None
     return None
 
-# Function to format currency values as a string
-def format_currency(amount):
-    return "${:,.2f}".format(amount)
-
 # Function to create the SQLite database table if it doesn't exist
 def create_table():
     connection = sqlite3.connect("bill_details.db")
@@ -71,7 +50,10 @@ def create_table():
         """
         CREATE TABLE IF NOT EXISTS bills (
             id INTEGER PRIMARY KEY,
-            image TEXT NOT NULL,
+            name TEXT NOT NULL,
+            date TEXT NOT NULL,
+            comment TEXT NOT NULL,
+            image BLOB NOT NULL,
             amount REAL NOT NULL
         )
         """
@@ -80,10 +62,10 @@ def create_table():
     connection.close()
 
 # Function to insert bill details into the database
-def insert_bill_details(image_base64, amount):
+def insert_bill_details(name, date, comment, image_base64, amount):
     connection = sqlite3.connect("bill_details.db")
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO bills (image, amount) VALUES (?, ?)", (image_base64, amount))
+    cursor.execute("INSERT INTO bills (name, date, comment, image, amount) VALUES (?, ?, ?, ?, ?)", (name, date, comment, image_base64, amount))
     connection.commit()
     connection.close()
 
@@ -91,7 +73,7 @@ def insert_bill_details(image_base64, amount):
 def get_bill_details():
     connection = sqlite3.connect("bill_details.db")
     cursor = connection.cursor()
-    cursor.execute("SELECT * FROM bills")
+    cursor.execute("SELECT id, name, date, comment, amount FROM bills")
     bill_details = cursor.fetchall()
     connection.close()
     return bill_details
@@ -111,68 +93,54 @@ def main():
     # Create the database table if it doesn't exist
     create_table()
 
-    # Move the upload button to the sidebar
-    uploaded_images = st.sidebar.file_uploader(
-        "Upload multiple images",
-        type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"],
-        accept_multiple_files=True,
-    )
+    # Collect bill details from the user using a form
+    st.subheader("Add a new bill")
+    with st.form("bill_form"):
+        name = st.text_input("Bill Name")
+        date = st.date_input("Bill Date")
+        comment = st.text_area("Comment")
+        image = st.file_uploader("Upload Bill Image", type=["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"])
 
-    clear_all = st.sidebar.button("Clear All")
+        submitted = st.form_submit_button("Submit")
 
-    # Initialize extracted_texts list
-    extracted_texts = []
+    if submitted and name and comment and image is not None:
+        # Convert the uploaded image to a PIL image object
+        pil_image = Image.open(image)
+        # Extract text from the image
+        extracted_text = pytesseract.image_to_string(pil_image)
 
-    if uploaded_images:
-        # List to store the extracted texts from all images
+        if extracted_text:
+            # Find the highest total value from the current text
+            total_value = find_highest_total_value(extracted_text)
 
-        for image in uploaded_images:
-            # Convert the uploaded image to a PIL image object
-            pil_image = Image.open(image)
+            if total_value is not None:
+                # Save the image as a base64 string
+                image_base64 = base64.b64encode(image.read()).decode("utf-8")
 
-            # Extract text from the image
-            extracted_text = extract_text_from_image(pil_image)
-
-            if extracted_text:
-                extracted_texts.append(extracted_text)
-
-                # Find the highest total value from the current text
-                total_value = find_highest_total_value(extracted_text)
-
-                if total_value is not None:
-                    # Save the image as a base64 string
-                    image_base64 = base64.b64encode(image.read()).decode("utf-8")
-
-                    # Insert bill details into the database
-                    insert_bill_details(image_base64, total_value)
-
-        # Clear the uploaded images
-        uploaded_images.clear()
-
-    if clear_all:
-        # Delete all bill details from the database
-        delete_all_bill_details()
-        # Clear the extracted texts
-        extracted_texts.clear()
+                # Insert bill details into the database
+                insert_bill_details(name, date, comment, image_base64, total_value)
 
     # Get bill details from the database
     bill_details = get_bill_details()
 
     if bill_details:
         # Create a DataFrame for bill details
-        bill_df = pd.DataFrame(bill_details, columns=["ID", "Image", "Amount"])
+        bill_df = pd.DataFrame(bill_details, columns=["ID", "Name", "Date", "Comment", "Amount"])
 
         # Calculate and display the total value of all bills
         total_value = bill_df["Amount"].sum()
-        st.write(f"Total value of all bills: {format_currency(total_value)}")
+        st.write(f"Total value of all bills: ${total_value:.2f}")
 
-        # Rename the ID column to "Bill Number" and display the bill details in a table
-        bill_df.rename(columns={"ID": "Bill Number"}, inplace=True)
-        bill_df["Bill Number"] = bill_df.index + 1
-        st.table(bill_df[["Bill Number", "Amount"]])
+        # Display the bill details in a table
+        st.table(bill_df[["ID", "Name", "Date", "Comment", "Amount"]])
+
+        # Add a "Clear All" button to delete all bill details
+        if st.button("Clear All"):
+            # Delete all bill details from the database
+            delete_all_bill_details()
 
     else:
-        st.write("No bill details found in the uploaded images.")
+        st.write("No bill details found.")
 
 if __name__ == "__main__":
     main()
