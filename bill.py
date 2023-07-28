@@ -5,7 +5,6 @@ import re
 import pandas as pd
 import sqlite3
 import base64
-from io import BytesIO
 
 # Function to find the highest total value from the extracted text
 def find_highest_total_value(text):
@@ -62,10 +61,10 @@ def create_table():
     connection.close()
 
 # Function to insert bill details into the database
-def insert_bill_details(name, date, comment, image_base64, amount):
+def insert_bill_details(name, date, comment, image, amount):
     connection = sqlite3.connect("bill_details.db")
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO bills (name, date, comment, image, amount) VALUES (?, ?, ?, ?, ?)", (name, date, comment, image_base64, amount))
+    cursor.execute("INSERT INTO bills (name, date, comment, image, amount) VALUES (?, ?, ?, ?, ?)", (name, date, comment, image, amount))
     connection.commit()
     connection.close()
 
@@ -94,7 +93,6 @@ def main():
     create_table()
 
     # Collect bill details from the user using a form
-    st.subheader("Add a new bill")
     with st.form("bill_form"):
         name = st.text_input("Bill Name")
         date = st.date_input("Bill Date")
@@ -114,11 +112,11 @@ def main():
             total_value = find_highest_total_value(extracted_text)
 
             if total_value is not None:
-                # Save the image as a base64 string
-                image_base64 = base64.b64encode(image.read()).decode("utf-8")
+                # Save the image as a binary large object (BLOB)
+                image_binary = image.read()
 
                 # Insert bill details into the database
-                insert_bill_details(name, date, comment, image_base64, total_value)
+                insert_bill_details(name, date, comment, image_binary, total_value)
 
     # Get bill details from the database
     bill_details = get_bill_details()
